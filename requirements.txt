@@ -1,0 +1,6 @@
+streamlit
+pandas
+plotly
+ortools
+xlsxwriter
+ortools
