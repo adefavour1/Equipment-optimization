@@ -194,7 +194,10 @@ def gantt_figure(schedule_df: pd.DataFrame, color_map=None):
     origin = datetime(2024, 1, 1, 8, 0, 0)
     df_plot = schedule_df.copy()
     df_plot["Start"] = df_plot["start"].apply(lambda x: origin + timedelta(minutes=int(x)))
-    df_plot["Finish"] = df_plot["end"].apply(lambda x: origin + timedelta(minutes(int(x))))
+    df_plot["end"] = pd.to_numeric(df_plot["end"], errors="coerce")
+    df_plot["Finish"] = df_plot["end"].apply(
+    lambda x: origin + timedelta(minutes=int(x)) if pd.notna(x) else None
+)
     df_plot["Task"] = df_plot.apply(lambda r: f"Job {r['job_id']} — T{r['task_id']} ({r['machine']})", axis=1)
 
     # Assign red/grey colors by job
