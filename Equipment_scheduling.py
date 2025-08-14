@@ -20,7 +20,7 @@ PRIMARY_GREY = "#9E9E9E"
 BG_GREY = "#f5f5f5"
 TEXT_DARK = "#1a1a1a"
 
-st.set_page_config(page_title="Job-Shop Scheduler (OR-Tools)", layout="wide")
+st.set_page_config(page_title="Job-Shop Scheduler", layout="wide")
 
 st.markdown(f"""
 <style>
@@ -55,7 +55,7 @@ st.markdown(f"""
     }}
 </style>
 <div class="app-title">Job-Shop Scheduling Optimizer</div>
-<div class="app-subtitle">OR-Tools · Red/Grey Theme · Gantt · CSV/Excel Export</div>
+<div class="app-subtitle">By Adefavour</div>
 <hr/>
 """, unsafe_allow_html=True)
 
