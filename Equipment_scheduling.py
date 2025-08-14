@@ -9,9 +9,9 @@ st.subheader("By Adefavour")
 
 st.markdown("""
 This app solves the optimization problem for assigning jobs to machines in a job-shop to minimize total machine idle time (maximize utilization).
-Enter the number of jobs and machines.
-Edit the processing times table (positive values only; assume all jobs can run on all machines).
-Click 'Optimize' to solve.
+\nEnter the number of jobs and machines.
+\nEdit the processing times table (positive values only; assume all jobs can run on all machines).
+\nClick 'Optimize' to solve.
 """)
 
 # Input for number of jobs and machines
