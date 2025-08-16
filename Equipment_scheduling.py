@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 st.title("Job-Shop Equipment Optimization App")
 st.subheader("By Adefavour")
+st.write("Last Updated: 10:06 PM WAT, Saturday, August 16, 2025")
 
 st.markdown("""
 This app solves the optimization problem for assigning jobs to machines in a job-shop to minimize total machine idle time (maximize utilization).
@@ -52,6 +53,7 @@ else:
     # Optimize button
     if st.button("Optimize"):
         tau = edited_df.to_numpy()
+        st.write("Debug - Tau:", tau)  # Debug check
 
         # Validate processing times
         if np.any(tau <= 0):
@@ -60,8 +62,8 @@ else:
             if num_jobs * num_machines > 20:
                 st.warning("Large problem size may slow optimization. Consider reducing jobs or machines.")
             
-            # Big M value
-            M = np.sum(np.max(tau, axis=1))
+            # Adjusted Big M value (maximum processing time + 1)
+            M = np.max(tau) + 1
 
             # Create PuLP model
             model = pulp.LpProblem("JobShop_Optimization", pulp.LpMinimize)
