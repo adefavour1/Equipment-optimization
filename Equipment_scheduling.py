@@ -20,7 +20,6 @@ num_machines = st.number_input("Number of machines", min_value=1, value=2, step=
 
 # Session state for processing times dataframe
 if 'processing_times' not in st.session_state or st.session_state.processing_times.shape != (num_jobs, num_machines):
-    # Initialize with random positive integers for demo
     initial_data = np.random.randint(1, 10, size=(num_jobs, num_machines))
     processing_times_df = pd.DataFrame(
         initial_data,
@@ -33,19 +32,23 @@ else:
 
 # Display editable dataframe for processing times
 st.subheader("Processing Times (hours)")
+st.write("Input Processing Times:", processing_times_df)  # Debug print
 edited_df = st.data_editor(processing_times_df, num_rows="dynamic", use_container_width=True)
-st.session_state.processing_times = edited_df  # Update session state
+st.session_state.processing_times = edited_df
 
 # Optimize button
 if st.button("Optimize"):
-    tau = edited_df.to_numpy()  # Extract numpy array (jobs x machines)
+    tau = edited_df.to_numpy()
 
     # Validate processing times
     if np.any(tau <= 0):
         st.error("All processing times must be positive numbers.")
     else:
-        # Big M value (sum of max processing time per job + 1)
-        M = np.sum(np.max(tau, axis=1)) + 1
+        if num_jobs * num_machines > 20:
+            st.warning("Large problem size may slow optimization. Consider reducing jobs or machines.")
+        
+        # Big M value
+        M = np.sum(np.max(tau, axis=1))  # Tighter bound
 
         # Create PuLP model
         model = pulp.LpProblem("JobShop_Optimization", pulp.LpMinimize)
@@ -55,14 +58,14 @@ if st.button("Optimize"):
         phi = pulp.LpVariable.dicts("phi", (i for i in range(num_jobs)), lowBound=0, cat="Continuous")
         cmax = pulp.LpVariable("cmax", lowBound=0, cat="Continuous")
 
-        # Sequencing variables for pairs (i < k) and each machine m
+        # Sequencing variables
         seq = pulp.LpVariable.dicts(
             "seq",
             ((i, k, m) for i in range(num_jobs) for k in range(i + 1, num_jobs) for m in range(num_machines)),
             cat="Binary"
         )
 
-        # Objective: Minimize total idle time = num_machines * cmax - total_busy
+        # Objective: Minimize total idle time
         total_busy = pulp.lpSum(tau[i, m] * z[(i, m)] for i in range(num_jobs) for m in range(num_machines))
         model += num_machines * cmax - total_busy
 
@@ -75,28 +78,19 @@ if st.button("Optimize"):
         for i in range(num_jobs):
             model += phi[i] + pulp.lpSum(tau[i, m] * z[(i, m)] for m in range(num_machines)) <= cmax
 
-        # 3. No overlapping on the same machine (for each pair i < k, each m)
+        # 3. No overlapping on the same machine
         for i in range(num_jobs):
             for k in range(i + 1, num_jobs):
                 for m in range(num_machines):
-                    # Constraint for i before k
-                    model += (
-                        phi[i] + tau[i, m] * z[(i, m)] <=
-                        phi[k] + M * (3 - seq[(i, k, m)] - z[(i, m)] - z[(k, m)])
-                    )
-                    # Constraint for k before i
-                    model += (
-                        phi[k] + tau[k, m] * z[(k, m)] <=
-                        phi[i] + M * (2 + seq[(i, k, m)] - z[(i, m)] - z[(k, m)])
-                    )
+                    if pulp.value(z[(i, m)]) + pulp.value(z[(k, m)]) == 2:  # Both on same machine
+                        model += phi[i] + tau[i, m] * z[(i, m)] <= phi[k] + M * (1 - seq[(i, k, m)])
+                        model += phi[k] + tau[k, m] * z[(k, m)] <= phi[i] + M * seq[(i, k, m)]
 
         # Solve the model
         solver_status = model.solve(pulp.PULP_CBC_CMD(msg=False))
 
         if solver_status == pulp.LpStatusOptimal:
             st.success("Optimal solution found!")
-
-            # Extract results
             assignments = {}
             start_times = {}
             completion_times = {}
@@ -117,14 +111,12 @@ if st.button("Optimize"):
             idle_time = num_machines * makespan - busy_time
             utilization = (busy_time / (num_machines * makespan)) * 100 if makespan > 0 else 0
 
-            # Display summary
             st.subheader("Optimization Results")
             st.write(f"Makespan (C_max): {makespan:.2f} hours")
             st.write(f"Total busy time: {busy_time:.2f} hours")
             st.write(f"Total idle time: {idle_time:.2f} hours")
             st.write(f"Machine utilization: {utilization:.2f}%")
 
-            # Display assignments and schedules
             st.subheader("Job Assignments and Schedules")
             results_df = pd.DataFrame({
                 "Job": [f"Job {i+1}" for i in range(num_jobs)],
@@ -135,11 +127,10 @@ if st.button("Optimize"):
             })
             st.dataframe(results_df)
 
-            # Gantt Chart
             st.subheader("Gantt Chart")
             fig, axs = plt.subplots(num_machines, 1, figsize=(12, 3 * num_machines), sharex=True)
             if num_machines == 1:
-                axs = [axs]  # Make it iterable
+                axs = [axs]
             colors = plt.cm.tab10(np.linspace(0, 1, num_jobs))
 
             for m in range(num_machines):
@@ -149,20 +140,25 @@ if st.button("Optimize"):
                 ax.set_xlabel("Time (hours)")
                 ax.grid(True)
 
-                # Collect jobs on this machine
                 jobs_on_m = [i for i in range(num_jobs) if assignments[i] == m]
-                for idx, i in enumerate(jobs_on_m):
-                    start = start_times[i]
-                    duration = tau[i, m]
-                    ax.barh(idx, duration, left=start, height=0.8, color=colors[i], edgecolor='black')
-                    ax.text(start + duration / 2, idx, f"Job {i+1}", ha='center', va='center', color='white')
-
-                ax.set_yticks(range(len(jobs_on_m)))
-                ax.set_yticklabels([f"Job {i+1}" for i in jobs_on_m])
+                if not jobs_on_m:
+                    ax.text(0.5, 0.5, "No jobs assigned", ha='center', va='center', transform=ax.transAxes)
+                else:
+                    for idx, i in enumerate(jobs_on_m):
+                        start = start_times[i]
+                        duration = tau[i, m]
+                        ax.barh(idx, duration, left=start, height=0.8, color=colors[i], edgecolor='black')
+                        ax.text(start + duration / 2, idx, f"Job {i+1}", ha='center', va='center', color='white')
+                    ax.set_yticks(range(len(jobs_on_m)))
+                    ax.set_yticklabels([f"Job {i+1}" for i in jobs_on_m])
                 ax.set_xlim(0, makespan + 1)
 
             plt.tight_layout()
             st.pyplot(fig)
 
+        elif solver_status == pulp.LpStatusInfeasible:
+            st.error("Problem is infeasible. Check constraints or inputs.")
+        elif solver_status == pulp.LpStatusUnbounded:
+            st.error("Problem is unbounded. Check objective or constraints.")
         else:
-            st.error("No optimal solution found. Try adjusting inputs or check for feasibility.")
+            st.error("No optimal solution found. Try adjusting inputs.")
