@@ -18,23 +18,36 @@ This app solves the optimization problem for assigning jobs to machines in a job
 num_jobs = st.number_input("Number of jobs", min_value=1, value=3, step=1)
 num_machines = st.number_input("Number of machines", min_value=1, value=2, step=1)
 
-# Session state for processing times dataframe
+# Session state for processing times dataframe with reset confirmation
 if 'processing_times' not in st.session_state or st.session_state.processing_times.shape != (num_jobs, num_machines):
-    initial_data = np.random.randint(1, 10, size=(num_jobs, num_machines))
-    processing_times_df = pd.DataFrame(
-        initial_data,
-        columns=[f"Machine {m+1}" for m in range(num_machines)],
-        index=[f"Job {i+1}" for i in range(num_jobs)]
-    )
-    st.session_state.processing_times = processing_times_df
+    if 'processing_times' in st.session_state:
+        if st.button("Confirm reset due to changed dimensions?"):
+            initial_data = np.random.randint(1, 10, size=(num_jobs, num_machines))
+            processing_times_df = pd.DataFrame(
+                initial_data,
+                columns=[f"Machine {m+1}" for m in range(num_machines)],
+                index=[f"Job {i+1}" for i in range(num_jobs)]
+            )
+            st.session_state.processing_times = processing_times_df
+    else:
+        initial_data = np.random.randint(1, 10, size=(num_jobs, num_machines))
+        processing_times_df = pd.DataFrame(
+            initial_data,
+            columns=[f"Machine {m+1}" for m in range(num_machines)],
+            index=[f"Job {i+1}" for i in range(num_jobs)]
+        )
+        st.session_state.processing_times = processing_times_df
 else:
     processing_times_df = st.session_state.processing_times
 
-# Display editable dataframe for processing times
+# Display and edit processing times
 st.subheader("Processing Times (hours)")
-st.write("Input Processing Times:", processing_times_df)  # Debug print
-edited_df = st.data_editor(processing_times_df, num_rows="dynamic", use_container_width=True)
-st.session_state.processing_times = edited_df
+st.write("Input Processing Times:", processing_times_df)
+if edited_df.shape != (num_jobs, num_machines):
+    st.error("Edited table dimensions do not match specified jobs and machines. Please adjust.")
+else:
+    edited_df = st.data_editor(processing_times_df, num_rows="dynamic", use_container_width=True)
+    st.session_state.processing_times = edited_df
 
 # Optimize button
 if st.button("Optimize"):
@@ -48,7 +61,7 @@ if st.button("Optimize"):
             st.warning("Large problem size may slow optimization. Consider reducing jobs or machines.")
         
         # Big M value
-        M = np.sum(np.max(tau, axis=1))  # Tighter bound
+        M = np.sum(np.max(tau, axis=1))
 
         # Create PuLP model
         model = pulp.LpProblem("JobShop_Optimization", pulp.LpMinimize)
@@ -78,13 +91,12 @@ if st.button("Optimize"):
         for i in range(num_jobs):
             model += phi[i] + pulp.lpSum(tau[i, m] * z[(i, m)] for m in range(num_machines)) <= cmax
 
-        # 3. No overlapping on the same machine
+        # 3. No overlapping on the same machine (corrected sequencing)
         for i in range(num_jobs):
             for k in range(i + 1, num_jobs):
                 for m in range(num_machines):
-                    if pulp.value(z[(i, m)]) + pulp.value(z[(k, m)]) == 2:  # Both on same machine
-                        model += phi[i] + tau[i, m] * z[(i, m)] <= phi[k] + M * (1 - seq[(i, k, m)])
-                        model += phi[k] + tau[k, m] * z[(k, m)] <= phi[i] + M * seq[(i, k, m)]
+                    model += phi[i] + tau[i, m] * z[(i, m)] <= phi[k] + M * (1 - seq[(i, k, m)] + (1 - z[(i, m)]) + (1 - z[(k, m)]))
+                    model += phi[k] + tau[k, m] * z[(k, m)] <= phi[i] + M * (seq[(i, k, m)] + (1 - z[(i, m)]) + (1 - z[(k, m)]))
 
         # Solve the model
         solver_status = model.solve(pulp.PULP_CBC_CMD(msg=False))
