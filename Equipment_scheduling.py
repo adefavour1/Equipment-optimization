@@ -42,7 +42,6 @@ else:
 
 # Display and edit processing times
 st.subheader("Processing Times (hours) - Edit Below")
-st.write("Input Processing Times:", processing_times_df)
 edited_df = st.data_editor(processing_times_df, num_rows="dynamic", use_container_width=True)
 st.session_state.processing_times = edited_df
 
