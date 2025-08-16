@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 st.title("Job-Shop Equipment Optimization App")
 st.subheader("By Adefavour")
-st.write("Last Updated: 10:56 PM WAT, Saturday, August 16, 2025")
+st.write("Last Updated: 11:01 PM WAT, Saturday, August 16, 2025")
 
 st.markdown("""
 This app solves the optimization problem for assigning jobs to machines in a job-shop to minimize total machine idle time (maximize utilization).
@@ -36,5 +36,3 @@ if 'processing_times' not in st.session_state or st.session_state.processing_tim
             initial_data,
             columns=[f"Machine {m+1}" for m in range(num_machines)],
             index=[f"Job {i+1}" for i in range(num_jobs)]
-        )
-        st
