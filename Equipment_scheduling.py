@@ -125,14 +125,6 @@ else:
                 idle_time = num_machines * makespan - busy_time
                 utilization = (busy_time / (num_machines * makespan)) * 100 if makespan > 0 else 0
 
-                # Enhanced debugging
-                st.write("Debug - Assignments:", {f"Job {i+1}": f"Machine {assignments[i]+1}" for i in range(num_jobs)})
-                st.write("Debug - Start Times:", {f"Job {i+1}": f"{start_times[i]:.2f}" for i in range(num_jobs)})
-                st.write("Debug - Completion Times:", {f"Job {i+1}": f"{completion_times[i]:.2f}" for i in range(num_jobs)})
-                min_busy_time = np.sum(np.min(tau, axis=1))
-                if busy_time > min_busy_time:
-                    st.warning(f"Busy time ({busy_time:.2f} hours) exceeds minimum possible ({min_busy_time:.2f} hours). Check sequencing.")
-
                 st.subheader("Optimization Results")
                 st.write(f"Makespan (C_max): {makespan:.2f} hours")
                 st.write(f"Total busy time: {busy_time:.2f} hours")
@@ -149,6 +141,9 @@ else:
                 })
                 st.dataframe(results_df)
 
+                # -------------------------------
+                # Gantt Chart
+                # -------------------------------
                 st.subheader("Gantt Chart")
                 fig, axs = plt.subplots(num_machines, 1, figsize=(12, 3 * num_machines), sharex=True)
                 if num_machines == 1:
@@ -177,6 +172,37 @@ else:
 
                 plt.tight_layout()
                 st.pyplot(fig)
+
+                # -------------------------------
+                # Additional Charts
+                # -------------------------------
+                st.subheader("Additional Charts")
+
+                # 1. Machine Utilization Bar Chart
+                utilization_data = []
+                for m in range(num_machines):
+                    busy_m = sum(tau[i, m] for i in range(num_jobs) if assignments[i] == m)
+                    utilization_m = (busy_m / makespan) * 100 if makespan > 0 else 0
+                    utilization_data.append({"Machine": f"Machine {m+1}", "Utilization (%)": utilization_m})
+
+                utilization_df = pd.DataFrame(utilization_data)
+                st.write("Machine Utilization (%)")
+                st.bar_chart(utilization_df.set_index("Machine"))
+
+                # 2. Idle vs Busy Time Pie Chart
+                st.write("System Busy vs Idle Time")
+                fig2, ax2 = plt.subplots()
+                ax2.pie([busy_time, idle_time], labels=["Busy Time", "Idle Time"], autopct='%1.1f%%', colors=["#4CAF50", "#FF5733"])
+                ax2.set_title("Overall Machine Time Distribution")
+                st.pyplot(fig2)
+
+                # 3. Job Processing Times Bar Chart
+                job_proc_df = pd.DataFrame({
+                    "Job": [f"Job {i+1}" for i in range(num_jobs)],
+                    "Processing Time": [tau[i, assignments[i]] for i in range(num_jobs)]
+                })
+                st.write("Processing Times per Job")
+                st.bar_chart(job_proc_df.set_index("Job"))
 
             elif solver_status == pulp.LpStatusInfeasible:
                 st.error("Problem is infeasible. Check constraints or inputs.")
